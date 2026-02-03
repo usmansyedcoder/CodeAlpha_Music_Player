@@ -1,69 +1,38 @@
-// Music Library - Sample songs (You can replace these with your own music files)
+// Music Library - Using your local MP3 files
 const musicLibrary = [
   {
     id: 1,
-    title: "Blinding Lights",
-    artist: "The Weeknd",
-    duration: "3:20",
-    src: "https://assets.codepen.io/4358584/Blinding-Lights.mp3",
-    cover: "https://images.unsplash.com/photo-1511379938547-c1f69419868d?w=400"
+    title: "Song 1",
+    artist: "Artist 1",
+    duration: "3:45",
+    src: "Songs/song1.mp3",
+    cover: "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=400"
   },
   {
     id: 2,
-    title: "Stay",
-    artist: "The Kid LAROI & Justin Bieber",
-    duration: "2:21",
-    src: "https://assets.codepen.io/4358584/Stay.mp3",
-    cover: "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w-400"
-  },
-  {
-    id: 3,
-    title: "Good 4 U",
-    artist: "Olivia Rodrigo",
-    duration: "2:58",
-    src: "https://assets.codepen.io/4358584/Good-4-U.mp3",
-    cover: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=400"
-  },
-  {
-    id: 4,
-    title: "Levitating",
-    artist: "Dua Lipa",
-    duration: "3:23",
-    src: "https://assets.codepen.io/4358584/Levitating.mp3",
-    cover: "https://images.unsplash.com/photo-1518609878373-06d740f60d8b?w=400"
-  },
-  {
-    id: 5,
-    title: "Heat Waves",
-    artist: "Glass Animals",
-    duration: "3:58",
-    src: "https://assets.codepen.io/4358584/Heat-Waves.mp3",
-    cover: "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=400"
-  },
-  {
-    id: 6,
-    title: "Save Your Tears",
-    artist: "The Weeknd",
-    duration: "3:35",
-    src: "https://assets.codepen.io/4358584/Save-Your-Tears.mp3",
+    title: "Song 2",
+    artist: "Artist 2",
+    duration: "4:20",
+    src: "Songs/song2.mp3",
     cover: "https://images.unsplash.com/photo-1511379938547-c1f69419868d?w=400"
   },
   {
-    id: 7,
-    title: "Industry Baby",
-    artist: "Lil Nas X",
-    duration: "3:32",
-    src: "https://assets.codepen.io/4358584/Industry-Baby.mp3",
-    cover: "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=400"
+    id: 3,
+    title: "Song 3",
+    artist: "Artist 3",
+    duration: "3:15",
+    src: "Songs/song3.mp3",
+    cover: "https://images.unsplash.com/photo-1518609878373-06d740f60d8b?w=400"
   },
-  {
-    id: 8,
-    title: "Shivers",
-    artist: "Ed Sheeran",
-    duration: "3:27",
-    src: "https://assets.codepen.io/4358584/Shivers.mp3",
-    cover: "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=400"
-  }
+  // You can add more songs here following the same format
+  // {
+  //   id: 4,
+  //   title: "Song 4",
+  //   artist: "Artist 4",
+  //   duration: "3:30",
+  //   src: "Songs/song4.mp3",
+  //   cover: "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=400"
+  // }
 ];
 
 // DOM Elements
@@ -92,6 +61,7 @@ function initPlayer() {
   // Add event listeners
   audio.addEventListener('ended', playNextSong);
   audio.addEventListener('timeupdate', updateProgress);
+  audio.addEventListener('loadedmetadata', updateSongDuration);
   volumeSlider.addEventListener('input', updateVolume);
   
   // Add keyboard shortcuts
@@ -166,31 +136,70 @@ function createProgressBar() {
     const clickX = e.offsetX;
     const duration = audio.duration;
     
-    audio.currentTime = (clickX / width) * duration;
+    if (duration) {
+      audio.currentTime = (clickX / width) * duration;
+    }
   });
 }
 
 // Load a song
 function loadSong(index) {
   const song = filteredSongs[index];
-  audio.src = song.src;
   
-  // Update now playing display
-  updateNowPlaying(song);
-  
-  // Highlight current song in playlist
-  highlightPlayingSong();
+  // Check if file exists
+  fetch(song.src, { method: 'HEAD' })
+    .then(response => {
+      if (response.ok) {
+        audio.src = song.src;
+        updateNowPlaying(song);
+        highlightPlayingSong();
+        
+        // When audio is loaded, update duration
+        audio.onloadedmetadata = () => {
+          if (audio.duration) {
+            const durationElement = document.getElementById('duration');
+            if (durationElement) {
+              durationElement.textContent = formatTime(audio.duration);
+            }
+          }
+        };
+      } else {
+        console.error(`File not found: ${song.src}`);
+        alert(`File not found: ${song.title}`);
+      }
+    })
+    .catch(error => {
+      console.error('Error loading song:', error);
+      alert(`Error loading: ${song.title}`);
+    });
+}
+
+// Update song duration from actual audio file
+function updateSongDuration() {
+  const durationElement = document.getElementById('duration');
+  if (durationElement && audio.duration) {
+    durationElement.textContent = formatTime(audio.duration);
+    
+    // Update the song duration in the library if needed
+    if (filteredSongs[currentSongIndex]) {
+      filteredSongs[currentSongIndex].duration = formatTime(audio.duration);
+    }
+  }
 }
 
 // Play song
 function playSong() {
-  audio.play();
-  isPlaying = true;
-  updatePlayPauseButton();
-  
-  // Add visual feedback
-  const playPauseBtn = document.getElementById('play-pause');
-  playPauseBtn.classList.add('playing');
+  audio.play()
+    .then(() => {
+      isPlaying = true;
+      updatePlayPauseButton();
+      const playPauseBtn = document.getElementById('play-pause');
+      playPauseBtn.classList.add('playing');
+    })
+    .catch(error => {
+      console.error('Error playing audio:', error);
+      alert('Error playing audio. Please check the file.');
+    });
 }
 
 // Pause song
@@ -198,8 +207,6 @@ function pauseSong() {
   audio.pause();
   isPlaying = false;
   updatePlayPauseButton();
-  
-  // Remove visual feedback
   const playPauseBtn = document.getElementById('play-pause');
   playPauseBtn.classList.remove('playing');
 }
@@ -231,16 +238,11 @@ function playPrevSong() {
 function updatePlayPauseButton() {
   const playPauseBtn = document.getElementById('play-pause');
   playPauseBtn.textContent = isPlaying ? 'Pause' : 'Play';
-  playPauseBtn.innerHTML = isPlaying ? 
-    '<i class="fas fa-pause"></i> Pause' : 
-    '<i class="fas fa-play"></i> Play';
 }
 
 // Update volume
 function updateVolume() {
   audio.volume = volumeSlider.value;
-  
-  // Visual feedback for volume
   const volumeValue = Math.round(volumeSlider.value * 100);
   volumeSlider.title = `Volume: ${volumeValue}%`;
 }
@@ -249,20 +251,18 @@ function updateVolume() {
 function updateProgress() {
   const progressBar = document.getElementById('progress-bar');
   const currentTime = document.getElementById('current-time');
-  const duration = document.getElementById('duration');
   
   if (audio.duration) {
     const progressPercent = (audio.currentTime / audio.duration) * 100;
     progressBar.style.width = `${progressPercent}%`;
-    
-    // Update time display
     currentTime.textContent = formatTime(audio.currentTime);
-    duration.textContent = formatTime(audio.duration);
   }
 }
 
 // Format time (seconds to MM:SS)
 function formatTime(seconds) {
+  if (isNaN(seconds)) return "0:00";
+  
   const mins = Math.floor(seconds / 60);
   const secs = Math.floor(seconds % 60);
   return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
@@ -310,11 +310,6 @@ function setupSearch() {
     // Reset current song index
     currentSongIndex = 0;
     renderPlaylist();
-    
-    // If we're currently playing and the current song is no longer in filtered list
-    if (isPlaying && !filteredSongs.find(song => song.id === musicLibrary[currentSongIndex].id)) {
-      pauseSong();
-    }
   });
 }
 
@@ -364,7 +359,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initPlayer();
   setupSearch();
   
-  // Add some visual effects
+  // Add button click animations
   document.querySelectorAll('.controls button').forEach(button => {
     button.addEventListener('click', function() {
       this.style.transform = 'scale(0.95)';
@@ -375,8 +370,12 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-// Add Font Awesome icons (optional - you can remove if not needed)
-const fontAwesomeLink = document.createElement('link');
-fontAwesomeLink.rel = 'stylesheet';
-fontAwesomeLink.href = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css';
-document.head.appendChild(fontAwesomeLink);
+// Function to scan Songs folder for MP3 files (if you want dynamic loading)
+async function scanSongsFolder() {
+  // Note: This requires server-side implementation or specific configuration
+  // For now, we're using the hardcoded list above
+  console.log('Using predefined song list from musicLibrary array');
+}
+
+// Call scan function on load (optional)
+document.addEventListener('DOMContentLoaded', scanSongsFolder);
