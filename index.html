@@ -3,34 +3,48 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Music Player</title>
+    <title>Music Player - Local Files</title>
     <link rel="stylesheet" href="Style/style.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
   </head>
   <body>
     <div class="player-container">
-      <h1>Music Player</h1>
+      <h1><i class="fas fa-music"></i> Local Music Player</h1>
+      
       <div class="search-bar">
-        <input type="text" id="search" placeholder="Search for music..." />
+        <input type="text" id="search" placeholder="Search songs..." />
+        <i class="fas fa-search search-icon"></i>
       </div>
+      
       <div class="playlist">
         <ul id="playlist">
           <!-- Songs will be dynamically inserted here -->
         </ul>
       </div>
+      
+      <div class="now-playing-info">
+        <div class="now-playing" id="now-playing-display">
+          Select a song to play
+        </div>
+      </div>
+      
       <div class="controls">
-        <button id="prev">Prev</button>
-        <button id="play-pause">Play</button>
-        <button id="next">Next</button>
-        <input
-          type="range"
-          id="volume"
-          min="0"
-          max="1"
-          step="0.01"
-          value="0.5"
-        />
+        <button id="prev" title="Previous (Ctrl+Left)"><i class="fas fa-step-backward"></i> Prev</button>
+        <button id="play-pause" title="Play/Pause (Space)"><i class="fas fa-play"></i> Play</button>
+        <button id="next" title="Next (Ctrl+Right)"><i class="fas fa-step-forward"></i> Next</button>
+        
+        <div class="volume-control">
+          <i class="fas fa-volume-down"></i>
+          <input type="range" id="volume" min="0" max="1" step="0.01" value="0.5" title="Volume" />
+          <i class="fas fa-volume-up"></i>
+        </div>
+      </div>
+      
+      <div class="instructions">
+        <p><i class="fas fa-keyboard"></i> Shortcuts: Space = Play/Pause, Ctrl+←/→ = Prev/Next, Ctrl+↑/↓ = Volume</p>
       </div>
     </div>
+    
     <audio id="audio"></audio>
     <script src="Js/Script.js"></script>
   </body>
