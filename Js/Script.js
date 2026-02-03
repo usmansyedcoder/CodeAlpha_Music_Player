@@ -1,4 +1,4 @@
-// Music Library - Using your local MP3 files
+
 const musicLibrary = [
   {
     id: 1,
@@ -24,15 +24,6 @@ const musicLibrary = [
     src: "Songs/song3.mp3",
     cover: "https://images.unsplash.com/photo-1518609878373-06d740f60d8b?w=400"
   },
-  // You can add more songs here following the same format
-  // {
-  //   id: 4,
-  //   title: "Song 4",
-  //   artist: "Artist 4",
-  //   duration: "3:30",
-  //   src: "Songs/song4.mp3",
-  //   cover: "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=400"
-  // }
 ];
 
 // DOM Elements
@@ -62,10 +53,20 @@ function initPlayer() {
   audio.addEventListener('ended', playNextSong);
   audio.addEventListener('timeupdate', updateProgress);
   audio.addEventListener('loadedmetadata', updateSongDuration);
+  audio.addEventListener('canplaythrough', handleAudioReady);
   volumeSlider.addEventListener('input', updateVolume);
   
   // Add keyboard shortcuts
   document.addEventListener('keydown', handleKeyboardShortcuts);
+}
+
+// Handle when audio is ready to play
+function handleAudioReady() {
+  // If we were waiting to play after load, play now
+  if (window.shouldPlayAfterLoad) {
+    playSong();
+    window.shouldPlayAfterLoad = false;
+  }
 }
 
 // Render playlist
@@ -82,7 +83,7 @@ function renderPlaylist() {
   
   filteredSongs.forEach((song, index) => {
     const songItem = document.createElement('li');
-    songItem.className = `song-item ${index === currentSongIndex ? 'playing' : ''}`;
+    songItem.className = `song-item ${index === currentSongIndex && isPlaying ? 'playing' : ''}`;
     songItem.dataset.index = index;
     
     // Add animation delay for staggered appearance
@@ -97,9 +98,15 @@ function renderPlaylist() {
     `;
     
     songItem.addEventListener('click', () => {
+      // If clicking the same song that's already playing, toggle pause
+      if (currentSongIndex === index && isPlaying) {
+        pauseSong();
+        return;
+      }
+      
+      // If clicking a different song or song is paused, play it
       currentSongIndex = index;
-      loadSong(currentSongIndex);
-      playSong();
+      loadSong(currentSongIndex, true); // true means play after loading
       highlightPlayingSong();
     });
     
@@ -129,7 +136,6 @@ function createProgressBar() {
   
   // Add click event to progress container
   const progressContainer = document.getElementById('progress-container');
-  const progressBar = document.getElementById('progress-bar');
   
   progressContainer.addEventListener('click', (e) => {
     const width = progressContainer.clientWidth;
@@ -142,19 +148,28 @@ function createProgressBar() {
   });
 }
 
-// Load a song
-function loadSong(index) {
+// Load a song (with optional autoPlay parameter)
+function loadSong(index, autoPlay = false) {
   const song = filteredSongs[index];
   
-  // Check if file exists
+  // Pause current song if playing
+  if (isPlaying) {
+    audio.pause();
+    isPlaying = false;
+    updatePlayPauseButton();
+  }
+  
+  // Show loading state
+  updateNowPlaying(`Loading: ${song.title}...`);
+  
+  // Check if file exists and load it
   fetch(song.src, { method: 'HEAD' })
     .then(response => {
       if (response.ok) {
         audio.src = song.src;
-        updateNowPlaying(song);
-        highlightPlayingSong();
+        updateNowPlaying(`Loaded: ${song.title} by ${song.artist}`);
         
-        // When audio is loaded, update duration
+        // When audio metadata is loaded, update duration
         audio.onloadedmetadata = () => {
           if (audio.duration) {
             const durationElement = document.getElementById('duration');
@@ -162,14 +177,29 @@ function loadSong(index) {
               durationElement.textContent = formatTime(audio.duration);
             }
           }
+          
+          // If autoPlay is true, play the song
+          if (autoPlay) {
+            // Check if audio is ready to play
+            if (audio.readyState >= 3) { // HAVE_FUTURE_DATA or more
+              playSong();
+            } else {
+              // Wait for audio to be ready
+              window.shouldPlayAfterLoad = true;
+            }
+          }
         };
+        
+        highlightPlayingSong();
       } else {
         console.error(`File not found: ${song.src}`);
+        updateNowPlaying(`Error: File not found - ${song.title}`);
         alert(`File not found: ${song.title}`);
       }
     })
     .catch(error => {
       console.error('Error loading song:', error);
+      updateNowPlaying(`Error loading: ${song.title}`);
       alert(`Error loading: ${song.title}`);
     });
 }
@@ -189,17 +219,37 @@ function updateSongDuration() {
 
 // Play song
 function playSong() {
-  audio.play()
-    .then(() => {
-      isPlaying = true;
-      updatePlayPauseButton();
-      const playPauseBtn = document.getElementById('play-pause');
-      playPauseBtn.classList.add('playing');
-    })
-    .catch(error => {
-      console.error('Error playing audio:', error);
-      alert('Error playing audio. Please check the file.');
-    });
+  if (!audio.src) {
+    console.error('No audio source to play');
+    return;
+  }
+  
+  const playPromise = audio.play();
+  
+  if (playPromise !== undefined) {
+    playPromise
+      .then(() => {
+        isPlaying = true;
+        updatePlayPauseButton();
+        highlightPlayingSong();
+        updateNowPlaying(`Now Playing: ${filteredSongs[currentSongIndex].title}`);
+        
+        // Add visual feedback
+        const playPauseBtn = document.getElementById('play-pause');
+        playPauseBtn.classList.add('playing');
+      })
+      .catch(error => {
+        console.error('Error playing audio:', error);
+        isPlaying = false;
+        updatePlayPauseButton();
+        
+        // Handle autoplay restrictions
+        if (error.name === 'NotAllowedError') {
+          updateNowPlaying('Click play button to start (autoplay blocked)');
+          alert('Please click the play button to start playback (autoplay is blocked by browser)');
+        }
+      });
+  }
 }
 
 // Pause song
@@ -207,12 +257,24 @@ function pauseSong() {
   audio.pause();
   isPlaying = false;
   updatePlayPauseButton();
+  highlightPlayingSong();
+  
+  // Remove visual feedback
   const playPauseBtn = document.getElementById('play-pause');
   playPauseBtn.classList.remove('playing');
+  
+  updateNowPlaying(`Paused: ${filteredSongs[currentSongIndex].title}`);
 }
 
 // Toggle play/pause
 function togglePlayPause() {
+  if (!audio.src) {
+    // If no song is loaded, load and play the first song
+    currentSongIndex = 0;
+    loadSong(currentSongIndex, true);
+    return;
+  }
+  
   if (isPlaying) {
     pauseSong();
   } else {
@@ -223,21 +285,25 @@ function togglePlayPause() {
 // Play next song
 function playNextSong() {
   currentSongIndex = (currentSongIndex + 1) % filteredSongs.length;
-  loadSong(currentSongIndex);
-  playSong();
+  loadSong(currentSongIndex, true);
 }
 
 // Play previous song
 function playPrevSong() {
   currentSongIndex = (currentSongIndex - 1 + filteredSongs.length) % filteredSongs.length;
-  loadSong(currentSongIndex);
-  playSong();
+  loadSong(currentSongIndex, true);
 }
 
 // Update play/pause button
 function updatePlayPauseButton() {
   const playPauseBtn = document.getElementById('play-pause');
-  playPauseBtn.textContent = isPlaying ? 'Pause' : 'Play';
+  if (isPlaying) {
+    playPauseBtn.textContent = 'Pause';
+    playPauseBtn.innerHTML = '<i class="fas fa-pause"></i> Pause';
+  } else {
+    playPauseBtn.textContent = 'Play';
+    playPauseBtn.innerHTML = '<i class="fas fa-play"></i> Play';
+  }
 }
 
 // Update volume
@@ -261,7 +327,7 @@ function updateProgress() {
 
 // Format time (seconds to MM:SS)
 function formatTime(seconds) {
-  if (isNaN(seconds)) return "0:00";
+  if (isNaN(seconds) || !isFinite(seconds)) return "0:00";
   
   const mins = Math.floor(seconds / 60);
   const secs = Math.floor(seconds % 60);
@@ -283,14 +349,30 @@ function highlightPlayingSong() {
 }
 
 // Update now playing display
-function updateNowPlaying(song) {
+function updateNowPlaying(message) {
   let nowPlaying = document.querySelector('.now-playing');
   if (!nowPlaying) {
     nowPlaying = document.createElement('div');
     nowPlaying.className = 'now-playing';
     document.querySelector('.player-container').appendChild(nowPlaying);
   }
-  nowPlaying.innerHTML = `Now Playing: <span>${song.title}</span> by ${song.artist}`;
+  
+  // Check if message is already formatted or plain text
+  if (typeof message === 'string' && !message.includes('<span>')) {
+    // Format plain text messages
+    if (message.startsWith('Now Playing:')) {
+      const songTitle = filteredSongs[currentSongIndex]?.title || '';
+      const artist = filteredSongs[currentSongIndex]?.artist || '';
+      nowPlaying.innerHTML = `Now Playing: <span>${songTitle}</span> by ${artist}`;
+    } else if (message.startsWith('Paused:')) {
+      const songTitle = filteredSongs[currentSongIndex]?.title || '';
+      nowPlaying.innerHTML = `Paused: <span>${songTitle}</span>`;
+    } else {
+      nowPlaying.innerHTML = message;
+    }
+  } else {
+    nowPlaying.innerHTML = message;
+  }
 }
 
 // Search functionality
@@ -310,6 +392,11 @@ function setupSearch() {
     // Reset current song index
     currentSongIndex = 0;
     renderPlaylist();
+    
+    // If we're currently playing and the current song is no longer in filtered list
+    if (isPlaying && !filteredSongs.find(song => song.id === musicLibrary[currentSongIndex]?.id)) {
+      pauseSong();
+    }
   });
 }
 
@@ -368,14 +455,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }, 150);
     });
   });
+  
+  // Initial message
+  updateNowPlaying('Select a song from the playlist to play');
 });
-
-// Function to scan Songs folder for MP3 files (if you want dynamic loading)
-async function scanSongsFolder() {
-  // Note: This requires server-side implementation or specific configuration
-  // For now, we're using the hardcoded list above
-  console.log('Using predefined song list from musicLibrary array');
-}
-
-// Call scan function on load (optional)
-document.addEventListener('DOMContentLoaded', scanSongsFolder);
